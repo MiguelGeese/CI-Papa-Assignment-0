@@ -31,11 +31,59 @@ class Bird(Agent):
         self.there_is_no_escape()
         
         #YOUR CODE HERE -----------
-        if self.in_proximity_accuracy().count() >= 1:
-            self.change_image(1)
-            self.pos += self.move * 5
+        alignment_vector = Vector2(0, 0)
+        separation_vector = Vector2(0, 0)
+        cohesion_vector = Vector2(0, 0)
+
+        neighbors = list(self.in_proximity_accuracy())  # Convert to list to use len()
+        if not neighbors:
+            # If no neighbors, move randomly to ensure all birds are moving
+            self.move = Vector2(self.config.movement_speed, 0).rotate(pg.time.get_ticks() % 360)
+            self.pos += self.move * self.config.delta_time
+            return
+
+        for neighbor, _ in neighbors:
+            if hasattr(neighbor, 'move'):
+                alignment_vector += neighbor.move
+            separation_vector += self.pos - neighbor.pos
+            cohesion_vector += neighbor.pos
+
+        alignment_vector /= len(neighbors)
+        cohesion_vector /= len(neighbors)
+        cohesion_vector -= self.pos
+
+        # Normalize the vectors
+        if alignment_vector.length() > 0:
+            alignment_vector = alignment_vector.normalize()
+        if separation_vector.length() > 0:
+            separation_vector = separation_vector.normalize()
+        if cohesion_vector.length() > 0:
+            cohesion_vector = cohesion_vector.normalize()
+
+        # Apply weights
+        alignment_vector *= self.config.alignment_weight
+        separation_vector *= self.config.separation_weight
+        cohesion_vector *= self.config.cohesion_weight
+
+        # Calculate the total force
+        total_force = alignment_vector + separation_vector + cohesion_vector
+
+        # Update move direction
+        self.move += total_force
+
+        # Normalize the velocity to maintain consistent speed
+        if self.move.length() > 0:
+            self.move = self.move.normalize() * self.config.movement_speed
+
+        # Update position
+        self.pos += self.move * self.config.delta_time
+
+        # Change image based on separation distance
+        min_distance = min([self.pos.distance_to(neighbor.pos) for neighbor, _ in neighbors])
+        if min_distance < self.config.radius:  # Distance threshold for separation
+            self.change_image(0)  # Turn white when they should move apart
         else:
-            self.change_image(0)
+            self.change_image(1)  # Turn red when they are close together
         #END CODE -----------------
 
 
