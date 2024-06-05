@@ -6,7 +6,6 @@ from vi import Agent, Simulation
 from vi.config import Config, dataclass, deserialize
 
 
-
 @deserialize
 @dataclass
 class FlockingConfig(Config):
@@ -27,12 +26,14 @@ class Bird(Agent):
     config: FlockingConfig
 
     def change_position(self):
+        
         # Pac-man-style teleport to the other end of the screen when trying to escape
         self.there_is_no_escape()
         
         #YOUR CODE HERE -----------
         if self.in_proximity_accuracy().count() >= 1:
             self.change_image(1)
+            self.pos += self.move * 5
         else:
             self.change_image(0)
         #END CODE -----------------
