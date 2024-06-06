@@ -35,10 +35,11 @@ class Bird(Agent):
         separation_vector = Vector2(0, 0)
         cohesion_vector = Vector2(0, 0)
 
+
         neighbors = list(self.in_proximity_accuracy())  # Convert to list to use len()
         if not neighbors:
             # If no neighbors, move randomly to ensure all birds are moving
-            self.move = Vector2(self.config.movement_speed, 0).rotate(pg.time.get_ticks() % 360)
+            self.move = Vector2(self.config.movement_speed, 0)
             self.pos += self.move * self.config.delta_time
             return
 
@@ -84,6 +85,8 @@ class Bird(Agent):
             self.change_image(0)  # Turn white when they should move apart
         else:
             self.change_image(1)  # Turn red when they are close together
+        if min_distance < self.config.radius / 2:
+            self.move += separation_vector * 2
         #END CODE -----------------
 
 
@@ -129,8 +132,8 @@ class FlockingLive(Simulation):
     FlockingLive(
         FlockingConfig(
             image_rotation=True,
-            movement_speed=1,
-            radius=50,
+            movement_speed=5,
+            radius=75,
             seed=1,
         )
     )
