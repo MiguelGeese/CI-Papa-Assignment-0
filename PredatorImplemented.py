@@ -7,14 +7,16 @@ from vi.config import Config, dataclass, deserialize
 
 os.chdir("C:/Users/coolm/OneDrive - Vrije Universiteit Amsterdam/University documents/Second year/Collective intelligence/Assignment 0/Assignment_0/Assignment_0/CI-Papa-Assignment-0")
 
+predator_instance = None
+bird_instances = []
 
 @deserialize
 @dataclass
 class FlockingConfig(Config):
     # You can change these for different starting weights
     alignment_weight: float = 0.5
-    cohesion_weight: float = 0.5
-    separation_weight: float = 0.5
+    cohesion_weight: float = 0.6
+    separation_weight: float = 0.6
 
     # These should be left as is.
     delta_time: float = 0.5                                   # To learn more https://gafferongames.com/post/integration_basics/ 
@@ -27,23 +29,32 @@ class FlockingConfig(Config):
 class Bird(Agent):
     config: FlockingConfig
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        bird_instances.append(self)
+
     def change_position(self):
-        
-        # Pac-man-style teleport to the other end of the screen when trying to escape
+        global predator_instance
+
         self.there_is_no_escape()
         
         #YOUR CODE HERE -----------
         alignment_vector = Vector2(0, 0)
         separation_vector = Vector2(0, 0)
         cohesion_vector = Vector2(0, 0)
+        predator_avoidance_vector = Vector2(0, 0)
 
-
-        neighbors = list(self.in_proximity_accuracy())  # Convert to list to use len()
+        neighbors = list(self.in_proximity_accuracy())
         if not neighbors:
-            # If no neighbors, move randomly to ensure all birds are moving
             self.move = Vector2(self.config.movement_speed, 0)
             self.pos += self.move * self.config.delta_time
             return
+
+        if predator_instance:
+            distance_to_predator = self.pos.distance_to(predator_instance.pos)
+            if distance_to_predator < self.config.radius * 0.5:
+                predator_avoidance_vector = self.pos - predator_instance.pos
+                predator_avoidance_vector = predator_avoidance_vector.normalize() * self.config.movement_speed
 
         for neighbor, _ in neighbors:
             if hasattr(neighbor, 'move'):
@@ -55,7 +66,6 @@ class Bird(Agent):
         cohesion_vector /= len(neighbors)
         cohesion_vector -= self.pos
 
-        # Normalize the vectors
         if alignment_vector.length() > 0:
             alignment_vector = alignment_vector.normalize()
         if separation_vector.length() > 0:
@@ -63,33 +73,53 @@ class Bird(Agent):
         if cohesion_vector.length() > 0:
             cohesion_vector = cohesion_vector.normalize()
 
-        # Apply weights
         alignment_vector *= self.config.alignment_weight
         separation_vector *= self.config.separation_weight
         cohesion_vector *= self.config.cohesion_weight
 
-        # Calculate the total force
-        total_force = alignment_vector + separation_vector + cohesion_vector
+        total_force = alignment_vector + separation_vector + cohesion_vector + predator_avoidance_vector
 
-        # Update move direction
         self.move += total_force
 
-        # Normalize the velocity to maintain consistent speed
         if self.move.length() > 0:
             self.move = self.move.normalize() * self.config.movement_speed
 
-        # Update position
         self.pos += self.move * self.config.delta_time
 
-        # Change image based on separation distance
         min_distance = min([self.pos.distance_to(neighbor.pos) for neighbor, _ in neighbors])
-        if min_distance < self.config.radius:  # Distance threshold for separation
-            self.change_image(0)  # Turn white when they should move apart
+        if min_distance < self.config.radius:
+            self.change_image(0)
         else:
-            self.change_image(1)  # Turn red when they are close together
-        if min_distance < 0.1 / 2:
+            self.change_image(1)
+        if min_distance < self.config.radius / 2:
             self.move += separation_vector * 2
         #END CODE -----------------
+
+
+class Predator(Agent):
+    config: FlockingConfig
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.last_update_time = 0  # Initialize last update time
+
+    def change_position(self):
+        global bird_instances
+
+        self.there_is_no_escape()
+
+        # Update direction every 1.5 seconds
+        current_time = pg.time.get_ticks()
+        if current_time - self.last_update_time > 1500:
+            if bird_instances:
+                closest_bird = min(bird_instances, key=lambda bird: self.pos.distance_to(bird.pos))
+                direction_to_bird = closest_bird.pos - self.pos
+                if direction_to_bird.length() > 0:
+                    direction_to_bird = direction_to_bird.normalize()
+                    self.move = direction_to_bird * self.config.movement_speed
+            self.last_update_time = current_time
+
+        self.pos += self.move * self.config.delta_time
 
 
 class Selection(Enum):
@@ -101,7 +131,6 @@ class Selection(Enum):
 class FlockingLive(Simulation):
     selection: Selection = Selection.ALIGNMENT
     config: FlockingConfig
-    step_counter: int = 0  # Initialize step counter
 
     def handle_event(self, by: float):
         if self.selection == Selection.ALIGNMENT:
@@ -130,7 +159,6 @@ class FlockingLive(Simulation):
         a, c, s = self.config.weights()
         print(f"A: {a:.1f} - C: {c:.1f} - S: {s:.1f}")
 
-
 (
     FlockingLive(
         FlockingConfig(
@@ -141,5 +169,6 @@ class FlockingLive(Simulation):
         )
     )
     .batch_spawn_agents(50, Bird, images=["images/bird.png", "images/red.png"])
+    .batch_spawn_agents(1, Predator, images=["images/triangle@50px.png"])
     .run()
 )
